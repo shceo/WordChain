@@ -9,6 +9,7 @@ import 'package:gallery_saver/gallery_saver.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../gallery/gallery_notifier.dart';
 import 'chain_painter.dart';
 import 'game_notifier.dart';
 
@@ -44,7 +45,12 @@ class GameScreen extends HookConsumerWidget {
             icon: const Icon(Icons.camera_alt_outlined),
             onPressed: game.words.isEmpty
                 ? null
-                : () => _exportChainImage(context, chainKey, game.words.length),
+                : () => _exportChainImage(
+                      context,
+                      ref,
+                      chainKey,
+                      game.words.length,
+                    ),
           ),
           if (game.words.isNotEmpty)
             IconButton(
@@ -105,6 +111,7 @@ class GameScreen extends HookConsumerWidget {
 
   Future<void> _exportChainImage(
     BuildContext context,
+    WidgetRef ref,
     GlobalKey boundaryKey,
     int wordCount,
   ) async {
@@ -145,6 +152,15 @@ class GameScreen extends HookConsumerWidget {
         return;
       }
 
+      final galleryNotifier = ref.read(galleryProvider.notifier);
+      bool savedLocally = false;
+      try {
+        await galleryNotifier.saveImage(pngBytes);
+        savedLocally = true;
+      } catch (e) {
+        debugPrint('Local gallery save error: $e');
+      }
+
       final tempDir = await getTemporaryDirectory();
       final filename =
           'word_chain_${DateTime.now().millisecondsSinceEpoch}.png';
@@ -163,14 +179,21 @@ class GameScreen extends HookConsumerWidget {
       if (!messenger.mounted) return;
 
       if (saved == true) {
+        final location = savedLocally
+            ? 'в галерее устройства и внутри игры'
+            : 'в галерее устройства';
         messenger.showSnackBar(
           SnackBar(
-            content: Text('Цепочка из $wordCount слов сохранена в галерее.'),
+            content: Text('Цепочка из $wordCount слов сохранена $location.'),
           ),
         );
       } else {
         messenger.showSnackBar(
-          const SnackBar(content: Text('Не удалось сохранить изображение.')),
+          SnackBar(
+            content: Text(savedLocally
+                ? 'Внутри игры изображение сохранено, но не удалось добавить в системную галерею.'
+                : 'Не удалось сохранить изображение.'),
+          ),
         );
       }
     } catch (e) {

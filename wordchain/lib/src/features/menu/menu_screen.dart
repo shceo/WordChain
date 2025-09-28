@@ -25,15 +25,16 @@ class _MenuScreenState extends State<MenuScreen>
         AnimationController(vsync: this, duration: const Duration(seconds: 4))
           ..repeat(reverse: false);
 
-    // генерим лёгкий граф для декоративной анимации
+    // РіРµРЅРµСЂРёРј Р»С‘РіРєРёР№ РіСЂР°С„ РґР»СЏ РґРµРєРѕСЂР°С‚РёРІРЅРѕР№ Р°РЅРёРјР°С†РёРё
     final rnd = Random(42);
     _nodes = List.generate(30, (_) {
-      return Offset(rnd.nextDouble(), rnd.nextDouble()); // нормализованные 0..1
+      return Offset(rnd.nextDouble(),
+          rnd.nextDouble()); // РЅРѕСЂРјР°Р»РёР·РѕРІР°РЅРЅС‹Рµ 0..1
     });
 
     _edges = [];
     for (int i = 0; i < _nodes.length; i++) {
-      // по 2–3 случайных связи на узел
+      // РїРѕ 2вЂ“3 СЃР»СѓС‡Р°Р№РЅС‹С… СЃРІСЏР·Рё РЅР° СѓР·РµР»
       for (int k = 0; k < 2; k++) {
         final j = rnd.nextInt(_nodes.length);
         if (j != i) _edges.add((i, j));
@@ -109,11 +110,11 @@ class _MenuScreenState extends State<MenuScreen>
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.20),
+              color: Colors.black.withValues(alpha: 0.20),
               blurRadius: 28,
               offset: const Offset(0, 10)),
           BoxShadow(
-              color: Colors.black.withOpacity(0.10),
+              color: Colors.black.withValues(alpha: 0.10),
               blurRadius: 6,
               offset: const Offset(0, 2)),
         ],
@@ -217,15 +218,15 @@ class _GraphPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final pLine = Paint()
-      ..color = lineColor.withOpacity(0.75)
+      ..color = lineColor.withValues(alpha: 0.75)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
     final pNode = Paint()
-      ..color = nodeColor.withOpacity(0.9)
+      ..color = nodeColor.withValues(alpha: 0.9)
       ..style = PaintingStyle.fill;
 
-    final inset = 24.0;
+    const inset = 24.0;
     Offset map(Offset n) => Offset(
           lerpDouble(inset, size.width - inset, n.dx)!,
           lerpDouble(inset, size.height - inset, n.dy)!,
@@ -244,7 +245,11 @@ class _GraphPainter extends CustomPainter {
         o1.dy + (o2.dy - o1.dy) * local,
       );
       canvas.drawLine(
-          o1, end, pLine..color = lineColor.withOpacity(0.35 + 0.45 * local));
+          o1,
+          end,
+          pLine
+            ..color = lineColor.withValues(
+                alpha: (0.35 + 0.45 * local).clamp(0.0, 1.0)));
     }
 
     for (final n in nodes) {
