@@ -1,7 +1,15 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'dart:io';
+import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:gallery_saver/gallery_saver.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'chain_painter.dart';
 import 'game_notifier.dart';
 
 class GameScreen extends HookConsumerWidget {
@@ -14,6 +22,7 @@ class GameScreen extends HookConsumerWidget {
 
     final controller = useTextEditingController();
     final focusNode = useFocusNode();
+    final chainKey = useMemoized(() => GlobalKey(), const []);
 
     useEffect(() {
       if (game.initialized) {
@@ -30,6 +39,13 @@ class GameScreen extends HookConsumerWidget {
       appBar: AppBar(
         title: const Text('Word Chain'),
         actions: [
+          IconButton(
+            tooltip: 'Сохранить цепочку как изображение',
+            icon: const Icon(Icons.camera_alt_outlined),
+            onPressed: game.words.isEmpty
+                ? null
+                : () => _exportChainImage(context, chainKey, game.words.length),
+          ),
           if (game.words.isNotEmpty)
             IconButton(
               tooltip: 'Очистить цепочку',
@@ -44,7 +60,15 @@ class GameScreen extends HookConsumerWidget {
       body: Column(
         children: [
           _ScoreHeader(score: game.score, nextLetter: nextLetter),
-          Expanded(child: _ChainView(game: game)),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: RepaintBoundary(
+                key: chainKey,
+                child: _ChainCanvas(words: game.words),
+              ),
+            ),
+          ),
           _InputBar(
             controller: controller,
             focusNode: focusNode,
@@ -78,6 +102,84 @@ class GameScreen extends HookConsumerWidget {
 
     focusNode.requestFocus();
   }
+
+  Future<void> _exportChainImage(
+    BuildContext context,
+    GlobalKey boundaryKey,
+    int wordCount,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (kIsWeb) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Сохранение изображений поддерживается только на мобильных устройствах.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final renderObject = boundaryKey.currentContext?.findRenderObject();
+      final boundary =
+          renderObject is RenderRepaintBoundary ? renderObject : null;
+      if (boundary == null) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Нечего сохранять — цепочка ещё не отрисована.'),
+          ),
+        );
+        return;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 20));
+      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData?.buffer.asUint8List();
+      if (pngBytes == null) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Не удалось подготовить изображение.')),
+        );
+        return;
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      final filename =
+          'word_chain_${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File('${tempDir.path}/$filename');
+      await file.writeAsBytes(pngBytes, flush: true);
+
+      final saved = await GallerySaver.saveImage(
+        file.path,
+        albumName: 'WordChain',
+      );
+
+      try {
+        await file.delete();
+      } catch (_) {}
+
+      if (!messenger.mounted) return;
+
+      if (saved == true) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Цепочка из $wordCount слов сохранена в галерее.'),
+          ),
+        );
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Не удалось сохранить изображение.')),
+        );
+      }
+    } catch (e) {
+      if (!messenger.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Ошибка сохранения: $e')),
+      );
+    }
+  }
 }
 
 class _ScoreHeader extends StatelessWidget {
@@ -104,34 +206,41 @@ class _ScoreHeader extends StatelessWidget {
   }
 }
 
-class _ChainView extends StatelessWidget {
-  final GameState game;
+class _ChainCanvas extends StatelessWidget {
+  final List<String> words;
 
-  const _ChainView({required this.game});
+  const _ChainCanvas({required this.words});
 
   @override
   Widget build(BuildContext context) {
-    if (!game.initialized) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    final colors = Theme.of(context).colorScheme;
+    final borderRadius = BorderRadius.circular(28);
 
-    if (game.words.isEmpty) {
-      return const Center(
-        child: Text('Начните цепочку с любого слова'),
-      );
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      itemCount: game.words.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final word = game.words[index];
-        return ListTile(
-          leading: CircleAvatar(child: Text('${index + 1}')),
-          title: Text(word),
-        );
-      },
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        border:
+            Border.all(color: colors.outline.withAlpha((255 * 0.35).round())),
+        color: colors.surfaceContainerHighest.withAlpha((255 * 0.55).round()),
+      ),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            CustomPaint(
+              painter: ChainPainter(words: words, colors: colors),
+            ),
+            if (words.isEmpty)
+              Center(
+                child: Text(
+                  'Начните цепочку с любого слова',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
