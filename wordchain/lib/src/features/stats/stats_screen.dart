@@ -107,7 +107,7 @@ class StatsScreen extends StatelessWidget {
     );
   }
 }
-
+ 
 class _MetricCard extends StatelessWidget {
   const _MetricCard({
     required this.title,

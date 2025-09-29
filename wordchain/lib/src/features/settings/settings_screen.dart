@@ -8,42 +8,417 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool sound = true;
-  bool timer = false; // по умолчанию выкл. (Relax)
+  // state
+  double music = 0.75;
+  double effects = 0.55;
+  bool timer = true;
   bool hints = true;
+
+  static const _photoBlue = Color(0xFF6DC7D1);
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(
+        centerTitle: true,
+        toolbarHeight: 88,
+        title: Text(
+          'Settings',
+          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.3,
+              ),
+        ),
+      ),
       body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          SwitchListTile(
-            title: const Text('Sound'),
-            value: sound,
-            onChanged: (v) => setState(() => sound = v),
+          // Sound & Music
+          _SoftCard(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionTitle(context, 'Sound & Music'),
+                  const SizedBox(height: 18),
+                  _rowLabel(context, 'Music volume'),
+                  const SizedBox(height: 8),
+                  _VolumeSlider(
+                    value: music,
+                    onChanged: (v) => setState(() => music = v),
+                  ),
+                  const SizedBox(height: 16),
+                  _rowLabel(context, 'Effects volume'),
+                  const SizedBox(height: 8),
+                  _VolumeSlider(
+                    value: effects,
+                    onChanged: (v) => setState(() => effects = v),
+                  ),
+                ],
+              ),
+            ),
           ),
-          SwitchListTile(
-            title: const Text('Timer (Challenge mode)'),
-            value: timer,
-            onChanged: (v) => setState(() => timer = v),
+          const SizedBox(height: 16),
+
+          // Game Options
+          _SoftCard(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionTitle(context, 'Game Options'),
+                  const SizedBox(height: 10),
+                  _OptionRow(
+                    label: 'Timer (Challenge mode)',
+                    trailing: _PillSwitch(
+                      value: timer,
+                      onChanged: (v) => setState(() => timer = v),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _OptionRow(
+                    label: 'Category hints',
+                    trailing: _PillSwitch(
+                      value: hints,
+                      onChanged: (v) => setState(() => hints = v),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          SwitchListTile(
-            title: const Text('Category hints'),
-            value: hints,
-            onChanged: (v) => setState(() => hints = v),
+          const SizedBox(height: 16),
+
+          // How to Play
+          _SoftCard(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionTitle(context, 'How to Play'),
+                  const SizedBox(height: 14),
+                  LayoutBuilder(
+                    builder: (context, c) {
+                      final gap = 12.0;
+                      final w = (c.maxWidth - gap * 2) / 3;
+                      return Row(
+                        children: [
+                          SizedBox(
+                            width: w,
+                            child: const _PlayStepCard(
+                              title: 'Pick a letter',
+                            ),
+                          ),
+                          SizedBox(width: gap),
+                          SizedBox(
+                            width: w,
+                            child: const _PlayStepCard(
+                              title: 'Type a word',
+                            ),
+                          ),
+                          SizedBox(width: gap),
+                          SizedBox(
+                            width: w,
+                            child: const _PlayStepCard(
+                              title: 'Watch it grow',
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
-          const Divider(),
-          const ListTile(
-            title: Text('How to Play'),
-            subtitle: Text('Choose a letter from an existing word, add a new word sharing that letter.'),
+          const SizedBox(height: 16),
+
+          // About
+          _SoftCard(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionTitle(context, 'About'),
+                  const SizedBox(height: 10),
+                  _aboutLine(context, 'WordChain v0.1.0'),
+                  _aboutLine(context, 'Authors: Team WordChain'),
+                  _aboutLine(context, 'Photo Blue UI • Minimal • Dark'),
+                ],
+              ),
+            ),
           ),
-          const ListTile(
-            title: Text('About'),
-            subtitle: Text('WordChain v0.1.0 — Local fonts, English UI, no orientation lock.'),
+        ],
+      ),
+      backgroundColor:
+          cs.surface, // у кого тема — будет тёмная/светлая корректно
+    );
+  }
+
+  Widget _sectionTitle(BuildContext context, String text) {
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
+    );
+  }
+
+  Widget _rowLabel(BuildContext context, String text) {
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
+          ),
+    );
+  }
+
+  Widget _aboutLine(BuildContext context, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+            ),
+      ),
+    );
+  }
+}
+
+/// Карточка с мягкой рамкой, верхним «бликом» и лёгкой тенью.
+class _SoftCard extends StatelessWidget {
+  const _SoftCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withOpacity(0.66),
+        borderRadius: BorderRadius.circular(22),
+        border:
+            Border.all(color: cs.outlineVariant.withOpacity(0.55), width: 1.6),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.10),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: 14,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(22)),
+              ),
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// Узкий трек с круглым «шариком», как на макете.
+class _VolumeSlider extends StatelessWidget {
+  const _VolumeSlider({required this.value, required this.onChanged});
+
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  static const _photoBlue = Color(0xFF6DC7D1);
+
+  @override
+  Widget build(BuildContext context) {
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        trackHeight: 8,
+        activeTrackColor: _photoBlue,
+        inactiveTrackColor: Colors.white.withOpacity(0.16),
+        thumbColor: const Color(0xFF16282E),
+        overlayShape: SliderComponentShape.noOverlay,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+      ),
+      child: Slider(
+        value: value,
+        onChanged: onChanged,
+      ),
+    );
+  }
+}
+
+/// Пилюльный тумблер справа (без стандартного Switch).
+class _PillSwitch extends StatelessWidget {
+  const _PillSwitch({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  static const _photoBlue = Color(0xFF6DC7D1);
+
+  @override
+  Widget build(BuildContext context) {
+    final trackW = 60.0;
+    final trackH = 38.0;
+    final knob = trackH - 12;
+
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        width: trackW,
+        height: trackH,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: value ? _photoBlue : const Color(0xFF3C454B),
+          borderRadius: BorderRadius.circular(trackH / 2),
+          border: Border.all(
+            color:
+                Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5),
+            width: 2,
+          ),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 220),
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          curve: Curves.easeOutCubic,
+          child: Container(
+            width: knob,
+            height: knob,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F2328),
+              borderRadius: BorderRadius.circular(knob / 2),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OptionRow extends StatelessWidget {
+  const _OptionRow({required this.label, required this.trailing});
+
+  final String label;
+  final Widget trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.titleLarge?.copyWith(
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
+        );
+    return SizedBox(
+      height: 64,
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: style)),
+          trailing,
+        ],
+      ),
+    );
+  }
+}
+
+/// Маленькая карточка шага с мини-«графом».
+class _PlayStepCard extends StatelessWidget {
+  const _PlayStepCard({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 170,
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 80,
+            child: CustomPaint(painter: _MiniGraphPainter()),
+          ),
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.75),
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+class _MiniGraphPainter extends CustomPainter {
+  static const _nodeFill = Color(0xFF125058);
+  static const _edgeColor = Color(0xFF56969E);
+  static const _stroke = Color(0xFFB0C2C6);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2 + 8;
+
+    final points = [
+      Offset(cx - 60, cy + 8),
+      Offset(cx, cy - 26),
+      Offset(cx + 46, cy + 8),
+    ];
+
+    final edge = Paint()
+      ..color = _edgeColor
+      ..strokeWidth = 6
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    for (var i = 0; i < points.length - 1; i++) {
+      canvas.drawLine(points[i], points[i + 1], edge);
+    }
+
+    final nodeFill = Paint()..color = _nodeFill;
+    final nodeStroke = Paint()
+      ..color = _stroke
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    for (final p in points) {
+      canvas.drawCircle(p, 14, nodeFill);
+      canvas.drawCircle(p, 14, nodeStroke);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
