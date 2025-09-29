@@ -30,7 +30,7 @@ class WordChainApp extends StatelessWidget {
         '/game': (_) => const GameScreen(),
         '/gallery': (_) => const GalleryScreen(),
         '/achievements': (_) => const AchievementsScreen(),
-        '/stats': (_) => const StatsScreen(),
+        '/stats': (_) => StatsScreen(),
         '/settings': (_) => const SettingsScreen(),
       },
     );
