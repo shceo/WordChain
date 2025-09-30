@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'game_settings_notifier.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // state
   double music = 0.75;
   double effects = 0.55;
-  bool timer = true;
-  bool hints = true;
-
-  static const _photoBlue = Color(0xFF6DC7D1);
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(gameSettingsProvider);
+    final settingsNotifier = ref.read(gameSettingsProvider.notifier);
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -75,18 +75,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _OptionRow(
                     label: 'Timer (Challenge mode)',
                     trailing: _PillSwitch(
-                      value: timer,
-                      onChanged: (v) => setState(() => timer = v),
+                      value: settings.timerEnabled,
+                      onChanged: (v) => settingsNotifier.toggleTimer(v),
                     ),
                   ),
                   const SizedBox(height: 8),
                   _OptionRow(
-                    label: 'Category hints',
+                    label: 'Category mode',
                     trailing: _PillSwitch(
-                      value: hints,
-                      onChanged: (v) => setState(() => hints = v),
+                      value: settings.categoryEnabled,
+                      onChanged: (v) => settingsNotifier.toggleCategories(v),
                     ),
                   ),
+                  if (settings.categoryEnabled) ...[
+                    const SizedBox(height: 12),
+                    _CategoryPicker(
+                      value: settings.selectedCategory,
+                      onChanged: (value) => settingsNotifier.setCategory(value),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -174,7 +181,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Text(
       text,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.75),
           ),
     );
   }
@@ -185,7 +193,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Text(
         text,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.8),
             ),
       ),
     );
@@ -203,13 +214,13 @@ class _SoftCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withOpacity(0.66),
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.66),
         borderRadius: BorderRadius.circular(22),
-        border:
-            Border.all(color: cs.outlineVariant.withOpacity(0.55), width: 1.6),
+        border: Border.all(
+            color: cs.outlineVariant.withValues(alpha: 0.55), width: 1.6),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.10),
+            color: Colors.black.withValues(alpha: 0.10),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -224,7 +235,7 @@ class _SoftCard extends StatelessWidget {
             height: 14,
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(22)),
               ),
@@ -252,7 +263,7 @@ class _VolumeSlider extends StatelessWidget {
       data: SliderTheme.of(context).copyWith(
         trackHeight: 8,
         activeTrackColor: _photoBlue,
-        inactiveTrackColor: Colors.white.withOpacity(0.16),
+        inactiveTrackColor: Colors.white.withValues(alpha: 0.16),
         thumbColor: const Color(0xFF16282E),
         overlayShape: SliderComponentShape.noOverlay,
         thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
@@ -266,6 +277,37 @@ class _VolumeSlider extends StatelessWidget {
 }
 
 /// Пилюльный тумблер справа (без стандартного Switch).
+class _CategoryPicker extends StatelessWidget {
+  const _CategoryPicker({required this.value, required this.onChanged});
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = GameSettingsNotifier.categories;
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(
+        labelText: 'Active category',
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      ),
+      items: [
+        for (final item in items)
+          DropdownMenuItem<String>(
+            value: item,
+            child: Text(item),
+          ),
+      ],
+      onChanged: (value) {
+        if (value != null) onChanged(value);
+      },
+    );
+  }
+}
+
 class _PillSwitch extends StatelessWidget {
   const _PillSwitch({required this.value, required this.onChanged});
 
@@ -292,8 +334,10 @@ class _PillSwitch extends StatelessWidget {
           color: value ? _photoBlue : const Color(0xFF3C454B),
           borderRadius: BorderRadius.circular(trackH / 2),
           border: Border.all(
-            color:
-                Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5),
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
+                .withValues(alpha: 0.5),
             width: 2,
           ),
         ),
@@ -324,7 +368,8 @@ class _OptionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.titleLarge?.copyWith(
-          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
+          color:
+              Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.85),
         );
     return SizedBox(
       height: 64,
@@ -350,9 +395,9 @@ class _PlayStepCard extends StatelessWidget {
     return Container(
       height: 170,
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withOpacity(0.6),
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         children: [
@@ -370,7 +415,7 @@ class _PlayStepCard extends StatelessWidget {
                     color: Theme.of(context)
                         .colorScheme
                         .onSurface
-                        .withOpacity(0.75),
+                        .withValues(alpha: 0.75),
                     fontWeight: FontWeight.w600,
                   ),
             ),

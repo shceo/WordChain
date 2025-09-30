@@ -11,6 +11,8 @@ import 'package:path_provider/path_provider.dart';
 
 import '../gallery/gallery_notifier.dart';
 import 'chain_painter.dart';
+import '../settings/game_settings_notifier.dart';
+import '../../core/models.dart';
 import 'game_notifier.dart';
 
 class GameScreen extends HookConsumerWidget {
@@ -27,19 +29,19 @@ class GameScreen extends HookConsumerWidget {
     final focusNode = useFocusNode();
     final chainKey = useMemoized(() => GlobalKey(), const []);
 
-    // анимация «роста ветви» при добавлении слова
+    // �������� ������ ����� ��� ���������� �����
     final growth = useState(1.0);
     useEffect(() {
       if (game.initialized) focusNode.requestFocus();
       return null;
     }, [game.initialized]);
 
-    // когда изменилось количество слов — проигрываем плавную дорисовку
+    // ����� ���������� ���������� ���� � ����������� ������� ���������
     final wordsLen = game.words.length;
     useEffect(() {
       growth.value = 0.0;
       Future.microtask(() async {
-        // 500мс easeOutCubic
+        // 500�� easeOutCubic
         const steps = 24;
         for (var i = 0; i <= steps; i++) {
           await Future.delayed(const Duration(milliseconds: 12));
@@ -48,6 +50,22 @@ class GameScreen extends HookConsumerWidget {
       });
       return null;
     }, [wordsLen]);
+
+    final settingsNotifier = ref.read(gameSettingsProvider.notifier);
+    final modeLetter = _modeLetter(game.mode);
+    final modeTooltip = _modeTooltip(game.mode);
+
+    useEffect(() {
+      if (!game.timed || !game.finished) return null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Time is up! Restart the chain to play again.')),
+        );
+      });
+      return null;
+    }, [game.timed, game.finished]);
 
     final nextLetter = game.words.isEmpty ? null : _lastLetter(game.words.last);
 
@@ -66,7 +84,7 @@ class GameScreen extends HookConsumerWidget {
         actions: [
           _SquareIconButton(
             icon: Icons.camera_alt_outlined,
-            tooltip: 'Сохранить цепочку как изображение',
+            tooltip: 'Save snapshot',
             onPressed: game.words.isEmpty
                 ? null
                 : () => _exportChainImage(
@@ -74,25 +92,28 @@ class GameScreen extends HookConsumerWidget {
           ),
           const SizedBox(width: 8),
           _SquareIconButton(
-            icon: Icons.pause_rounded,
-            tooltip: 'Пауза',
-            onPressed: () {
-              // TODO: показать модал/меню паузы
-            },
+            icon: Icons.refresh_rounded,
+            tooltip: 'Restart chain',
+            onPressed: () => notifier.resetChain(),
           ),
           const SizedBox(width: 8),
           _ModeChip(
-            modeLetter: 'R', // Relax/Challenge/Themed -> R/C/T
-            onTap: () {
-              // TODO: переключение режима игры (Relax/Challenge/Themed)
-            },
+            modeLetter: modeLetter,
+            tooltip: modeTooltip,
+            onTap: () => settingsNotifier.cycleMode(),
           ),
           const SizedBox(width: 12),
         ],
       ),
       body: Column(
         children: [
-          _ScoreHeader(score: game.score, nextLetter: nextLetter),
+          _ScoreHeader(
+            score: game.score,
+            nextLetter: nextLetter,
+            timed: game.timed,
+            secondsLeft: game.secondsLeft,
+            category: game.category,
+          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -110,7 +131,8 @@ class GameScreen extends HookConsumerWidget {
             focusNode: focusNode,
             onSubmit: submit,
             nextLetter: nextLetter,
-            enabled: game.initialized,
+            category: game.category,
+            enabled: game.initialized && !game.finished,
           ),
         ],
       ),
@@ -149,8 +171,8 @@ class GameScreen extends HookConsumerWidget {
     if (kIsWeb) {
       messenger.showSnackBar(
         const SnackBar(
-            content: Text(
-                'Сохранение изображений поддерживается только на мобильных устройствах.')),
+            content:
+                Text('Saving images is only supported on mobile devices.')),
       );
       return;
     }
@@ -161,7 +183,8 @@ class GameScreen extends HookConsumerWidget {
           renderObject is RenderRepaintBoundary ? renderObject : null;
       if (boundary == null) {
         messenger.showSnackBar(const SnackBar(
-            content: Text('Нечего сохранять — цепочка ещё не отрисована.')));
+            content: Text(
+                "There's nothing to save—the chain hasn't been drawn yet.")));
         return;
       }
 
@@ -170,8 +193,8 @@ class GameScreen extends HookConsumerWidget {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       final pngBytes = byteData?.buffer.asUint8List();
       if (pngBytes == null) {
-        messenger.showSnackBar(const SnackBar(
-            content: Text('Не удалось подготовить изображение.')));
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Failed to prepare image.')));
         return;
       }
 
@@ -201,19 +224,19 @@ class GameScreen extends HookConsumerWidget {
 
       if (saved == true) {
         final location = savedLocally
-            ? 'в галерее устройства и внутри игры'
-            : 'в галерее устройства';
+            ? 'in the device gallery and inside the game'
+            : 'in the device gallery';
         messenger.showSnackBar(SnackBar(
-            content: Text('Цепочка из $wordCount слов сохранена $location.')));
+            content: Text('Chain of $wordCount words saved by $location.')));
       } else {
         messenger.showSnackBar(SnackBar(
             content: Text(savedLocally
-                ? 'Внутри игры изображение сохранено, но не удалось добавить в системную галерею.'
-                : 'Не удалось сохранить изображение.')));
+                ? 'The image was saved inside the game, but could not be added to the system gallery.'
+                : "Couldn't save image.")));
       }
     } catch (e) {
       if (!messenger.mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('Ошибка сохранения: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('Saving error: $e')));
     }
   }
 }
@@ -250,16 +273,43 @@ class _SquareIconButton extends StatelessWidget {
   }
 }
 
+String _modeLetter(GameMode mode) {
+  switch (mode) {
+    case GameMode.relax:
+      return 'R';
+    case GameMode.challenge:
+      return 'C';
+    case GameMode.themed:
+      return 'T';
+  }
+}
+
+String _modeTooltip(GameMode mode) {
+  switch (mode) {
+    case GameMode.relax:
+      return 'Relax: free play';
+    case GameMode.challenge:
+      return 'Challenge: 60s timer';
+    case GameMode.themed:
+      return 'Themed: category words only';
+  }
+}
+
 class _ModeChip extends StatelessWidget {
   final String modeLetter;
   final VoidCallback? onTap;
+  final String? tooltip;
 
-  const _ModeChip({required this.modeLetter, this.onTap});
+  const _ModeChip({
+    required this.modeLetter,
+    this.onTap,
+    this.tooltip,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap, // TODO: смена режима (Relax/Challenge/Themed)
+    final chip = InkWell(
+      onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
         height: 28,
@@ -279,57 +329,126 @@ class _ModeChip extends StatelessWidget {
         ),
       ),
     );
+
+    if (tooltip == null || tooltip!.isEmpty) return chip;
+    return Tooltip(message: tooltip!, child: chip);
   }
 }
 
 class _ScoreHeader extends StatelessWidget {
   final int score;
   final String? nextLetter;
+  final bool timed;
+  final int secondsLeft;
+  final String? category;
 
-  const _ScoreHeader({required this.score, required this.nextLetter});
+  const _ScoreHeader({
+    required this.score,
+    required this.nextLetter,
+    required this.timed,
+    required this.secondsLeft,
+    required this.category,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Очки: $score',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600)),
-          const Spacer(),
-          if (nextLetter != null)
+          Row(
+            children: [
+              Text(
+                'Score: $score',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              if (timed)
+                Row(
+                  children: [
+                    const Icon(Icons.timer_outlined, size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      _formatTime(secondsLeft),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          if (nextLetter != null || category != null) ...[
+            const SizedBox(height: 6),
             Row(
               children: [
-                Text('Следующая буква: ', style: theme.textTheme.titleMedium),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6DC7D1),
-                    borderRadius: BorderRadius.circular(10),
+                if (nextLetter != null) ...[
+                  Text(
+                    'Next letter:',
+                    style: theme.textTheme.titleMedium,
                   ),
-                  child: Text(
-                    nextLetter!,
-                    style: const TextStyle(
-                      color: Color(0xFF16282E),
-                      fontWeight: FontWeight.w800,
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      nextLetter!,
+                      style: const TextStyle(
+                        color: Color(0xFF16282E),
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                ),
+                ],
+                if (category != null) ...[
+                  const SizedBox(width: 12),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: cs.secondary.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Category: $category',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: cs.secondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
+          ],
         ],
       ),
     );
+  }
+
+  String _formatTime(int seconds) {
+    final clamped = seconds < 0 ? 0 : seconds;
+    final minutes = clamped ~/ 60;
+    final secs = clamped % 60;
+    final mm = minutes.toString().padLeft(2, '0');
+    final ss = secs.toString().padLeft(2, '0');
+    return '$mm:$ss';
   }
 }
 
 class _ChainCanvas extends StatelessWidget {
   final List<String> words;
-  final double growth; // 0..1 – насколько дорисована последняя ветвь
+  final double growth;
 
   const _ChainCanvas({required this.words, required this.growth});
 
@@ -342,12 +461,12 @@ class _ChainCanvas extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: borderRadius,
         border: Border.all(color: colors.outline.withOpacity(0.35)),
-        color: colors.surfaceContainerHighest.withOpacity(0.55),
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
       ),
       child: ClipRRect(
         borderRadius: borderRadius,
         child: TweenAnimationBuilder<double>(
-          key: ValueKey(words.length), // перезапуск при добавлении слова
+          key: ValueKey(words.length),
           tween: Tween(begin: 0, end: growth),
           duration: const Duration(milliseconds: 500),
           curve: Curves.easeOutCubic,
@@ -361,7 +480,7 @@ class _ChainCanvas extends StatelessWidget {
               child: words.isEmpty
                   ? Center(
                       child: Text(
-                        'Начните цепочку с любого слова',
+                        'Start the chain with any word',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                     )
@@ -379,6 +498,7 @@ class _InputBar extends StatelessWidget {
   final FocusNode focusNode;
   final Future<void> Function() onSubmit;
   final String? nextLetter;
+  final String? category;
   final bool enabled;
 
   const _InputBar({
@@ -386,15 +506,18 @@ class _InputBar extends StatelessWidget {
     required this.focusNode,
     required this.onSubmit,
     required this.nextLetter,
+    required this.category,
     required this.enabled,
   });
 
   @override
   Widget build(BuildContext context) {
     const photoBlue = Color(0xFF6DC7D1);
-    final hint = nextLetter == null
-        ? 'Введите первое слово'
-        : 'Слово на букву $nextLetter';
+    final baseHint = nextLetter == null
+        ? 'Type any word'
+        : 'Type a word starting with $nextLetter';
+    final hint =
+        category == null ? baseHint : '$baseHint (category: $category)';
     final dpr = MediaQuery.of(context).devicePixelRatio;
     final onePx = 1 / dpr;
 
@@ -406,19 +529,20 @@ class _InputBar extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Новое слово',
-                    style: TextStyle(
-                      color: photoBlue,
-                      fontWeight: FontWeight.w700,
-                    )),
+                const Text(
+                  'New word',
+                  style: TextStyle(
+                    color: photoBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 6),
-                // ровный divider под текстом без сдвига
                 Container(
                   decoration: BoxDecoration(
                     color: Theme.of(context)
                         .colorScheme
                         .surfaceVariant
-                        .withOpacity(0.30),
+                        .withValues(alpha: 0.30),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: photoBlue, width: 2),
                   ),
@@ -441,10 +565,9 @@ class _InputBar extends StatelessWidget {
                     ],
                   ),
                 ),
-                // тонкая линия (px-perfect)
                 SizedBox(
                     height: onePx,
-                    child: Container(color: photoBlue.withOpacity(0.9))),
+                    child: Container(color: photoBlue.withValues(alpha: 0.9))),
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
@@ -453,7 +576,7 @@ class _InputBar extends StatelessWidget {
                         color: Theme.of(context)
                             .colorScheme
                             .onSurface
-                            .withOpacity(0.55)),
+                            .withValues(alpha: 0.55)),
                   ),
                 ),
               ],
@@ -471,7 +594,7 @@ class _InputBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 textStyle: const TextStyle(fontWeight: FontWeight.w800),
               ),
-              child: const Text('Добавить'),
+              child: const Text('Submit'),
             ),
           ),
         ],

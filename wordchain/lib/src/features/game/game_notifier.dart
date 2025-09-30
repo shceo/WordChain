@@ -3,32 +3,57 @@ import 'dart:async';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/models.dart';
 import '../achievements/achievements_notifier.dart';
+import '../settings/game_settings_notifier.dart';
 
 final gameProvider =
     NotifierProvider<GameNotifier, GameState>(GameNotifier.new);
 
 class GameState {
+  static const _unset = Object();
+
   final List<String> words;
   final int score;
   final bool initialized;
+  final GameMode mode;
+  final bool finished;
+  final bool timed;
+  final int secondsLeft;
+  final String? category;
 
   const GameState({
     required this.words,
     required this.score,
     required this.initialized,
+    required this.mode,
+    required this.finished,
+    required this.timed,
+    required this.secondsLeft,
+    required this.category,
   });
 
   GameState copyWith({
     List<String>? words,
     int? score,
     bool? initialized,
-  }) =>
-      GameState(
-        words: words ?? this.words,
-        score: score ?? this.score,
-        initialized: initialized ?? this.initialized,
-      );
+    GameMode? mode,
+    bool? finished,
+    bool? timed,
+    int? secondsLeft,
+    Object? category = _unset,
+  }) {
+    return GameState(
+      words: words ?? this.words,
+      score: score ?? this.score,
+      initialized: initialized ?? this.initialized,
+      mode: mode ?? this.mode,
+      finished: finished ?? this.finished,
+      timed: timed ?? this.timed,
+      secondsLeft: secondsLeft ?? this.secondsLeft,
+      category: category == _unset ? this.category : category as String?,
+    );
+  }
 }
 
 class GameNotifier extends Notifier<GameState> {
@@ -40,9 +65,31 @@ class GameNotifier extends Notifier<GameState> {
 
   SharedPreferences? _prefs;
   bool _loadScheduled = false;
+  bool _settingsListenerAttached = false;
+
+  Timer? _countdown;
+  DateTime? _timerDeadline;
+  GameSettings? _currentSettings;
 
   @override
   GameState build() {
+    final settings = ref.watch(gameSettingsProvider);
+    _currentSettings = settings;
+
+    if (!_settingsListenerAttached) {
+      _settingsListenerAttached = true;
+      ref.listen<GameSettings>(gameSettingsProvider, (previous, next) {
+        _currentSettings = next;
+        final resetRequired = previous == null ||
+            previous.mode != next.mode ||
+            previous.selectedCategory != next.selectedCategory;
+        _applySettings(next, resetChain: resetRequired);
+        if (resetRequired) {
+          unawaited(_clearStoredChain());
+        }
+      });
+    }
+
     if (!_loadScheduled) {
       _loadScheduled = true;
       Future(() async {
@@ -53,7 +100,18 @@ class GameNotifier extends Notifier<GameState> {
         }
       });
     }
-    return const GameState(words: [], score: 0, initialized: false);
+
+    return GameState(
+      words: const [],
+      score: 0,
+      initialized: false,
+      mode: settings.mode,
+      finished: false,
+      timed: settings.timerEnabled,
+      secondsLeft:
+          settings.timerEnabled ? GameSettingsNotifier.timerDurationSeconds : 0,
+      category: settings.categoryEnabled ? settings.selectedCategory : null,
+    );
   }
 
   Future<SharedPreferences> _ensurePrefs() async {
@@ -63,11 +121,23 @@ class GameNotifier extends Notifier<GameState> {
   Future<void> _restore() async {
     final prefs = await _ensurePrefs();
     final saved = prefs.getStringList(_storageKey) ?? const [];
+    final GameSettings settings =
+        _currentSettings ?? ref.read(gameSettingsProvider);
+    final timed = settings.timerEnabled;
+    final category =
+        settings.categoryEnabled ? settings.selectedCategory : null;
+
     state = state.copyWith(
       words: saved,
       score: _calculateScore(saved),
       initialized: true,
+      finished: false,
+      mode: settings.mode,
+      timed: timed,
+      secondsLeft: timed ? GameSettingsNotifier.timerDurationSeconds : 0,
+      category: category,
     );
+    _stopTimer();
     ref.read(achievementsProvider.notifier).onChainRestored(saved);
   }
 
@@ -79,37 +149,76 @@ class GameNotifier extends Notifier<GameState> {
   }
 
   Future<String?> addWord(String word) async {
+    if (state.finished) {
+      return 'Time is up! Restart the chain to play again.';
+    }
+
     final trimmed = word.trim();
-    if (trimmed.isEmpty) return 'Введите слово';
+    if (trimmed.isEmpty) return 'Please enter a word';
 
     final firstLetter = _firstLetter(trimmed);
-    if (firstLetter == null) return 'Используйте буквы';
+    if (firstLetter == null) return 'Word must contain at least one letter';
 
     final words = List<String>.from(state.words);
     if (words.isNotEmpty) {
       final lastLetter = _lastLetter(words.last);
       if (lastLetter == null) {
-        return 'Предыдущее слово некорректно';
+        return 'Previous word has no valid ending letter';
       }
       if (lastLetter != firstLetter) {
-        return 'Нужно слово на букву "${lastLetter.toUpperCase()}"';
+        return 'Next word must start with "${lastLetter.toUpperCase()}"';
       }
     }
 
     final normalized = trimmed.toLowerCase();
     final alreadyUsed =
         words.any((existing) => existing.trim().toLowerCase() == normalized);
-    if (alreadyUsed) return 'Слово уже использовано';
+    if (alreadyUsed) return 'This word is already in the chain';
+
+    final categoryError = _validateCategory(normalized);
+    if (categoryError != null) return categoryError;
 
     words.add(trimmed);
     state = state.copyWith(
       words: words,
       score: _calculateScore(words),
       initialized: true,
+      finished: false,
     );
+    _startTimerIfNeeded();
     ref.read(achievementsProvider.notifier).onWordAdded(trimmed, words.length);
     await _persist(words);
     return null;
+  }
+
+  void _startTimerIfNeeded() {
+    if (!state.timed || _timerDeadline != null) return;
+    final duration =
+        Duration(seconds: GameSettingsNotifier.timerDurationSeconds);
+    _timerDeadline = DateTime.now().add(duration);
+    state = state.copyWith(
+      secondsLeft: duration.inSeconds,
+      finished: false,
+    );
+    _countdown =
+        Timer.periodic(const Duration(seconds: 1), (_) => _tickTimer());
+  }
+
+  void _tickTimer() {
+    if (_timerDeadline == null) return;
+    final remaining = _timerDeadline!.difference(DateTime.now()).inSeconds;
+    if (remaining <= 0) {
+      _stopTimer();
+      state = state.copyWith(secondsLeft: 0, finished: true);
+      return;
+    }
+    state = state.copyWith(secondsLeft: remaining);
+  }
+
+  void _stopTimer() {
+    _countdown?.cancel();
+    _countdown = null;
+    _timerDeadline = null;
   }
 
   String? _firstLetter(String value) {
@@ -123,8 +232,41 @@ class GameNotifier extends Notifier<GameState> {
     return matches.last.group(0)?.toLowerCase();
   }
 
+  String? _validateCategory(String normalizedWord) {
+    final category = state.category;
+    if (category == null) return null;
+    final bank = GameSettingsNotifier.categoryWordBank[category];
+    if (bank == null) return null;
+    if (!bank.contains(normalizedWord)) {
+      return 'Use words from the $category category';
+    }
+    return null;
+  }
+
   Future<void> resetChain() async {
-    state = state.copyWith(words: [], score: 0, initialized: true);
+    final GameSettings settings =
+        _currentSettings ?? ref.read(gameSettingsProvider);
+    _applySettings(settings, resetChain: true);
+    await _clearStoredChain();
+  }
+
+  void _applySettings(GameSettings settings, {required bool resetChain}) {
+    _stopTimer();
+    final timed = settings.timerEnabled;
+    final category =
+        settings.categoryEnabled ? settings.selectedCategory : null;
+    final updated = state.copyWith(
+      mode: settings.mode,
+      timed: timed,
+      secondsLeft: timed ? GameSettingsNotifier.timerDurationSeconds : 0,
+      category: category,
+      finished: false,
+      initialized: true,
+    );
+    state = resetChain ? updated.copyWith(words: const [], score: 0) : updated;
+  }
+
+  Future<void> _clearStoredChain() async {
     ref.read(achievementsProvider.notifier).onChainReset();
     final prefs = await _ensurePrefs();
     await prefs.remove(_storageKey);
