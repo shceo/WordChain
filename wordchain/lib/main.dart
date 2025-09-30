@@ -9,6 +9,9 @@ import 'src/features/achievements/achievements_screen.dart';
 import 'src/features/stats/stats_screen.dart';
 import 'src/features/settings/settings_screen.dart';
 
+final RouteObserver<PageRoute<dynamic>> routeObserver =
+    RouteObserver<PageRoute<dynamic>>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const ProviderScope(child: WordChainApp()));
@@ -25,6 +28,7 @@ class WordChainApp extends StatelessWidget {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
+      navigatorObservers: [routeObserver],
       routes: {
         '/': (_) => const MenuScreen(),
         '/game': (_) => const GameScreen(),

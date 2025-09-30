@@ -13,6 +13,7 @@ import '../gallery/gallery_notifier.dart';
 import 'chain_painter.dart';
 import '../settings/game_settings_notifier.dart';
 import '../../core/models.dart';
+import '../../core/sound_manager.dart';
 import 'game_notifier.dart';
 
 class GameScreen extends HookConsumerWidget {
@@ -51,6 +52,35 @@ class GameScreen extends HookConsumerWidget {
     final settingsNotifier = ref.read(gameSettingsProvider.notifier);
     final modeLetter = _modeLetter(game.mode);
     final modeTooltip = _modeTooltip(game.mode);
+
+    final soundManager = ref.read(soundManagerProvider);
+    final isTickingRef = useRef(false);
+
+    useEffect(() {
+      final timerDuration = GameSettingsNotifier.timerDurationSeconds;
+      final shouldTick = game.timed &&
+          !game.finished &&
+          game.secondsLeft > 0 &&
+          game.secondsLeft < timerDuration;
+
+      if (shouldTick && !isTickingRef.value) {
+        isTickingRef.value = true;
+        soundManager.startTimerTick();
+      } else if (!shouldTick && isTickingRef.value) {
+        isTickingRef.value = false;
+        soundManager.stopTimerTick();
+      }
+      return null;
+    }, [game.timed, game.finished, game.secondsLeft]);
+
+    useEffect(() {
+      return () {
+        if (isTickingRef.value) {
+          isTickingRef.value = false;
+          soundManager.stopTimerTick();
+        }
+      };
+    }, const []);
 
     useEffect(() {
       if (!game.timed || !game.finished) return null;
@@ -97,7 +127,10 @@ class GameScreen extends HookConsumerWidget {
           _ModeChip(
             modeLetter: modeLetter,
             tooltip: modeTooltip,
-            onTap: () => settingsNotifier.cycleMode(),
+            onTap: () {
+              settingsNotifier.cycleMode();
+              ref.read(gameProvider.notifier).resetChain();
+            },
           ),
           const SizedBox(width: 12),
         ],

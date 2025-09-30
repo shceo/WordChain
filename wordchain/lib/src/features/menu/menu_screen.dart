@@ -1,4 +1,4 @@
-﻿import 'dart:math';
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -7,10 +7,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:wordchain/main.dart';
 
 import '../../core/sound_manager.dart';
-
-// Shared RouteObserver used for RouteAware widgets in this file.
-final RouteObserver<PageRoute<dynamic>> routeObserver =
-    RouteObserver<PageRoute<dynamic>>();
+import '../game/game_notifier.dart';
 
 class MenuScreen extends ConsumerStatefulWidget {
   const MenuScreen({super.key});
@@ -136,8 +133,10 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                     edges: _edges,
                   ),
                   const SizedBox(height: 26),
-                  _bigBtn(context, 'Play', onBlue,
-                      () => Navigator.pushNamed(context, '/game')),
+                  _bigBtn(context, 'Play', onBlue, () {
+                    ref.read(gameProvider.notifier).resetChain();
+                    Navigator.pushNamed(context, '/game');
+                  }),
                   const SizedBox(height: 14),
                   _bigBtn(context, 'Gallery', onBlue,
                       () => Navigator.pushNamed(context, '/gallery')),
@@ -165,11 +164,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.20),
+              color: Colors.black.withOpacity(0.20),
               blurRadius: 28,
               offset: const Offset(0, 10)),
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.10),
+              color: Colors.black.withOpacity(0.10),
               blurRadius: 6,
               offset: const Offset(0, 2)),
         ],
@@ -262,12 +261,12 @@ class _GraphPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final pLine = Paint()
-      ..color = lineColor.withValues(alpha: 0.75)
+      ..color = lineColor.withOpacity(0.75)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
     final pNode = Paint()
-      ..color = nodeColor.withValues(alpha: 0.9)
+      ..color = nodeColor.withOpacity(0.9)
       ..style = PaintingStyle.fill;
 
     const inset = 24.0;
@@ -292,8 +291,8 @@ class _GraphPainter extends CustomPainter {
           o1,
           end,
           pLine
-            ..color = lineColor.withValues(
-                alpha: (0.35 + 0.45 * local).clamp(0.0, 1.0)));
+            ..color =
+                lineColor.withOpacity((0.35 + 0.45 * local).clamp(0.0, 1.0)));
     }
 
     for (final n in nodes) {

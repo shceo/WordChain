@@ -115,7 +115,7 @@ class GameNotifier extends Notifier<GameState> {
     return GameState(
       words: const [],
       score: 0,
-      initialized: false,
+      initialized: true,
       mode: settings.mode,
       finished: false,
       timed: settings.timerEnabled,
@@ -219,7 +219,6 @@ class GameNotifier extends Notifier<GameState> {
     );
     _countdown =
         Timer.periodic(const Duration(seconds: 1), (_) => _tickTimer());
-    unawaited(ref.read(soundManagerProvider).startTimerTick());
   }
 
   void _tickTimer() {
@@ -298,9 +297,7 @@ class GameNotifier extends Notifier<GameState> {
       finished: false,
       initialized: true,
     );
-    if (!timed) {
-      unawaited(ref.read(soundManagerProvider).stopTimerTick());
-    }
+    if (!timed) {}
     state = resetChain ? updated.copyWith(words: const [], score: 0) : updated;
   }
 
