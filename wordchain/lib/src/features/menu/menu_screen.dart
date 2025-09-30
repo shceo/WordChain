@@ -1,22 +1,31 @@
 import 'dart:math';
 import 'dart:ui';
-import 'package:flutter/material.dart';
 
-class MenuScreen extends StatefulWidget {
+import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import 'package:wordchain/main.dart';
+
+import '../../core/sound_manager.dart';
+
+class MenuScreen extends ConsumerStatefulWidget {
   const MenuScreen({super.key});
 
   @override
-  State<MenuScreen> createState() => _MenuScreenState();
+  ConsumerState<MenuScreen> createState() => _MenuScreenState();
 }
 
-class _MenuScreenState extends State<MenuScreen>
-    with SingleTickerProviderStateMixin {
+class _MenuScreenState extends ConsumerState<MenuScreen>
+    with SingleTickerProviderStateMixin, RouteAware {
   late final AnimationController _ctrl;
   late final List<Offset> _nodes;
   late final List<(int a, int b)> _edges;
 
   static const _kPhotoBlue = Color(0xFF6DC7D1);
   static const _kPlatinum = Color(0xFFE2F3F4);
+
+  bool _isRouteSubscribed = false;
+  bool _menuMusicPlaying = false;
 
   @override
   void initState() {
@@ -25,16 +34,12 @@ class _MenuScreenState extends State<MenuScreen>
         AnimationController(vsync: this, duration: const Duration(seconds: 4))
           ..repeat(reverse: false);
 
-    // РіРµРЅРµСЂРёРј Р»С‘РіРєРёР№ РіСЂР°С„ РґР»СЏ РґРµРєРѕСЂР°С‚РёРІРЅРѕР№ Р°РЅРёРјР°С†РёРё
     final rnd = Random(42);
-    _nodes = List.generate(30, (_) {
-      return Offset(rnd.nextDouble(),
-          rnd.nextDouble()); // РЅРѕСЂРјР°Р»РёР·РѕРІР°РЅРЅС‹Рµ 0..1
-    });
+    _nodes =
+        List.generate(30, (_) => Offset(rnd.nextDouble(), rnd.nextDouble()));
 
     _edges = [];
     for (int i = 0; i < _nodes.length; i++) {
-      // РїРѕ 2вЂ“3 СЃР»СѓС‡Р°Р№РЅС‹С… СЃРІСЏР·Рё РЅР° СѓР·РµР»
       for (int k = 0; k < 2; k++) {
         final j = rnd.nextInt(_nodes.length);
         if (j != i) _edges.add((i, j));
@@ -43,9 +48,55 @@ class _MenuScreenState extends State<MenuScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (!_isRouteSubscribed && route is PageRoute) {
+      routeObserver.subscribe(this, route);
+      _isRouteSubscribed = true;
+    }
+  }
+
+  @override
   void dispose() {
+    if (_isRouteSubscribed) {
+      routeObserver.unsubscribe(this);
+    }
+    _stopMenuMusic();
     _ctrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didPush() {
+    _playMenuMusic();
+  }
+
+  @override
+  void didPopNext() {
+    _playMenuMusic();
+  }
+
+  @override
+  void didPushNext() {
+    _stopMenuMusic();
+  }
+
+  @override
+  void didPop() {
+    _stopMenuMusic();
+  }
+
+  Future<void> _playMenuMusic() async {
+    if (_menuMusicPlaying) return;
+    _menuMusicPlaying = true;
+    await ref.read(soundManagerProvider).playMenuMusic();
+  }
+
+  Future<void> _stopMenuMusic() async {
+    if (!_menuMusicPlaying) return;
+    _menuMusicPlaying = false;
+    await ref.read(soundManagerProvider).stopMenuMusic();
   }
 
   @override
@@ -162,18 +213,7 @@ class _HeroGraphCard extends StatelessWidget {
       aspectRatio: 14 / 9,
       child: Container(
         decoration: BoxDecoration(
-          // color: photoBlue,
           borderRadius: BorderRadius.circular(28),
-          // boxShadow: [
-          //   BoxShadow(
-          //       color: Colors.black.withOpacity(0.18),
-          //       blurRadius: 30,
-          //       offset: const Offset(0, 14)),
-          //   BoxShadow(
-          //       color: Colors.black.withOpacity(0.12),
-          //       blurRadius: 10,
-          //       offset: const Offset(0, 4)),
-          // ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(28),

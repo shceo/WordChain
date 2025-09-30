@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -17,9 +17,6 @@ import 'game_notifier.dart';
 
 class GameScreen extends HookConsumerWidget {
   const GameScreen({super.key});
-
-  static const _photoBlue = Color(0xFF6DC7D1);
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final game = ref.watch(gameProvider);

@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/models.dart';
 import '../achievements/achievements_notifier.dart';
 import '../settings/game_settings_notifier.dart';
+import '../stats/stats_notifier.dart';
+import '../../core/sound_manager.dart';
 
 final gameProvider =
     NotifierProvider<GameNotifier, GameState>(GameNotifier.new);
@@ -83,6 +85,15 @@ class GameNotifier extends Notifier<GameState> {
         final resetRequired = previous == null ||
             previous.mode != next.mode ||
             previous.selectedCategory != next.selectedCategory;
+
+        if (resetRequired && state.words.isNotEmpty && !state.finished) {
+          final mode = state.mode;
+          final length = state.words.length;
+          unawaited(ref
+              .read(statsProvider.notifier)
+              .onSessionCompleted(mode: mode, wordCount: length));
+        }
+
         _applySettings(next, resetChain: resetRequired);
         if (resetRequired) {
           unawaited(_clearStoredChain());
@@ -179,12 +190,18 @@ class GameNotifier extends Notifier<GameState> {
     if (categoryError != null) return categoryError;
 
     words.add(trimmed);
+    final mode = state.mode;
+    final chainLength = words.length;
+
     state = state.copyWith(
       words: words,
       score: _calculateScore(words),
       initialized: true,
       finished: false,
     );
+    await ref
+        .read(statsProvider.notifier)
+        .onWordAdded(mode: mode, chainLength: chainLength);
     _startTimerIfNeeded();
     ref.read(achievementsProvider.notifier).onWordAdded(trimmed, words.length);
     await _persist(words);
@@ -208,8 +225,15 @@ class GameNotifier extends Notifier<GameState> {
     if (_timerDeadline == null) return;
     final remaining = _timerDeadline!.difference(DateTime.now()).inSeconds;
     if (remaining <= 0) {
+      final mode = state.mode;
+      final wordCount = state.words.length;
       _stopTimer();
       state = state.copyWith(secondsLeft: 0, finished: true);
+      if (wordCount > 0) {
+        unawaited(ref
+            .read(statsProvider.notifier)
+            .onSessionCompleted(mode: mode, wordCount: wordCount));
+      }
       return;
     }
     state = state.copyWith(secondsLeft: remaining);
@@ -244,6 +268,15 @@ class GameNotifier extends Notifier<GameState> {
   }
 
   Future<void> resetChain() async {
+    final mode = state.mode;
+    final wordCount = state.words.length;
+    final wasFinished = state.finished;
+    if (wordCount > 0 && !wasFinished) {
+      await ref
+          .read(statsProvider.notifier)
+          .onSessionCompleted(mode: mode, wordCount: wordCount);
+    }
+
     final GameSettings settings =
         _currentSettings ?? ref.read(gameSettingsProvider);
     _applySettings(settings, resetChain: true);

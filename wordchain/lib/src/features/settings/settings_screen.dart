@@ -163,8 +163,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ],
       ),
-      backgroundColor:
-          cs.surface, // у кого тема — будет тёмная/светлая корректно
+      backgroundColor: cs.surface,
     );
   }
 
@@ -203,7 +202,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
-/// Карточка с мягкой рамкой, верхним «бликом» и лёгкой тенью.
 class _SoftCard extends StatelessWidget {
   const _SoftCard({required this.child});
 
@@ -248,7 +246,6 @@ class _SoftCard extends StatelessWidget {
   }
 }
 
-/// Узкий трек с круглым «шариком», как на макете.
 class _VolumeSlider extends StatelessWidget {
   const _VolumeSlider({required this.value, required this.onChanged});
 
@@ -276,7 +273,6 @@ class _VolumeSlider extends StatelessWidget {
   }
 }
 
-/// Пилюльный тумблер справа (без стандартного Switch).
 class _CategoryPicker extends StatelessWidget {
   const _CategoryPicker({required this.value, required this.onChanged});
 
@@ -383,7 +379,6 @@ class _OptionRow extends StatelessWidget {
   }
 }
 
-/// Маленькая карточка шага с мини-«графом».
 class _PlayStepCard extends StatelessWidget {
   const _PlayStepCard({required this.title});
 

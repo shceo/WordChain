@@ -1,47 +1,52 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
-class StatsScreen extends StatelessWidget {
-  const StatsScreen({
-    super.key,
-    this.totalWords = 0,
-    this.longestChain = 0,
-    this.avgPerSession = 0.0,
-    this.bestSession,
-    this.recordsByMode = const {'Relax': 0, 'Challenge': 0, 'Themed': 0},
-  });     
+import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-  final int totalWords;
-  final int longestChain;
-  final double avgPerSession;
-  final int? bestSession;
-  final Map<String, int?> recordsByMode;
+import '../../core/models.dart';
+import 'stats_notifier.dart';
 
-  int _capInt(int? value) {
-    if (value == null) return 0;
+class StatsScreen extends ConsumerWidget {
+  const StatsScreen({super.key});
+
+  int _capInt(int value) {
     if (value < 0) return 0;
     const max = 1 << 30;
     return value > max ? max : value;
   }
 
-  Map<String, int> _sanitizeModes() {
-    final base = {
-      'Relax': 0,
-      'Challenge': 0,
-      'Themed': 0,
-    };
-    for (final entry in recordsByMode.entries) {
-      base[entry.key] = _capInt(entry.value);
+  Map<String, int> _recordsForDisplay(Map<GameMode, int> source) {
+    final map = <String, int>{};
+    for (final mode in GameMode.values) {
+      final label = _modeLabel(mode);
+      map[label] = _capInt(source[mode] ?? 0);
     }
-    return base;
+    return map;
+  }
+
+  static String _modeLabel(GameMode mode) {
+    switch (mode) {
+      case GameMode.relax:
+        return 'Relax';
+      case GameMode.challenge:
+        return 'Challenge';
+      case GameMode.themed:
+        return 'Themed';
+    }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(statsProvider);
     final theme = Theme.of(context);
-    final safeModes = _sanitizeModes();
-    final double normalizedAvg =
-        avgPerSession.isFinite ? avgPerSession.clamp(0.0, 9999.0) : 0.0;
-    final best = _capInt(bestSession);
+
+    final totalWords = _capInt(stats.totalWords);
+    final longestChain = _capInt(stats.longestChain);
+    final average = stats.averageWordsPerSession.isFinite
+        ? stats.averageWordsPerSession.clamp(0.0, 9999.0)
+        : 0.0;
+    final best = _capInt(stats.bestSession);
+    final safeModes = _recordsForDisplay(stats.bestByMode);
 
     return Scaffold(
       appBar: AppBar(
@@ -54,15 +59,17 @@ class StatsScreen extends StatelessWidget {
         ),
       ),
       body: LayoutBuilder(
-        builder: (context, c) {
+        builder: (context, constraints) {
           const horizontal = 16.0;
           const spacing = 16.0;
-          final full = c.maxWidth - horizontal * 2;
-          final colW = (full - spacing) / 2;
+          final fullWidth = constraints.maxWidth - horizontal * 2;
+          final columnWidth = (fullWidth - spacing) / 2;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(
-                horizontal: horizontal, vertical: 12),
+              horizontal: horizontal,
+              vertical: 12,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -71,22 +78,22 @@ class StatsScreen extends StatelessWidget {
                   runSpacing: spacing,
                   children: [
                     _MetricCard(
-                      width: colW,
+                      width: columnWidth,
                       title: 'Total words',
                       value: '$totalWords',
                     ),
                     _MetricCard(
-                      width: colW,
+                      width: columnWidth,
                       title: 'Longest chain',
                       value: '$longestChain',
                     ),
                     _MetricCard(
-                      width: colW,
+                      width: columnWidth,
                       title: 'Avg/session',
-                      value: normalizedAvg.toStringAsFixed(1),
+                      value: average.toStringAsFixed(1),
                     ),
                     _MetricCard(
-                      width: colW,
+                      width: columnWidth,
                       title: 'Best session',
                       value: best > 0 ? '$best' : '0',
                     ),
@@ -94,7 +101,7 @@ class StatsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 _ModesCard(
-                  width: full,
+                  width: fullWidth,
                   title: 'Records by mode',
                   entries: safeModes,
                 ),
@@ -107,7 +114,7 @@ class StatsScreen extends StatelessWidget {
     );
   }
 }
- 
+
 class _MetricCard extends StatelessWidget {
   const _MetricCard({
     required this.title,
@@ -132,35 +139,31 @@ class _MetricCard extends StatelessWidget {
             color: cs.outlineVariant.withValues(alpha: 0.5), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: Colors.black.withValues(alpha: 0.10),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
         ],
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            cs.surfaceContainerHighest.withValues(alpha: 0.72),
-            cs.surfaceContainerHighest.withValues(alpha: 0.60),
-          ],
-        ),
       ),
-      child: Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              value,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: cs.onSurface,
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface.withValues(alpha: 0.75),
                   ),
             ),
-            const SizedBox(height: 8),
+            const Spacer(),
             Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium,
+              value,
+              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                  ),
             ),
           ],
         ),
@@ -184,7 +187,8 @@ class _ModesCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final values = entries.values.toList();
-    final max = (values.isEmpty ? 0 : values.reduce((a, b) => a > b ? a : b));
+    final max = values.isEmpty ? 0 : values.reduce(math.max);
+
     return Container(
       width: width,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
@@ -214,9 +218,9 @@ class _ModesCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           ...entries.entries.map(
-            (e) => _ModeRow(
-              label: e.key,
-              value: e.value,
+            (entry) => _ModeRow(
+              label: entry.key,
+              value: entry.value,
               maxValue: max,
             ),
           ),
@@ -227,7 +231,6 @@ class _ModesCard extends StatelessWidget {
 }
 
 class _ModeRow extends StatelessWidget {
-  static const _photoBlue = Color(0xFF6DC7D1);
   const _ModeRow({
     required this.label,
     required this.value,
@@ -241,6 +244,8 @@ class _ModeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    const barColor = Color(0xFF6DC7D1);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -258,15 +263,15 @@ class _ModeRow extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: LayoutBuilder(
-              builder: (context, c) {
-                const trackH = 22.0;
-                final progress = (maxValue <= 0) ? 0.0 : value / maxValue;
+              builder: (context, constraints) {
+                const trackHeight = 22.0;
+                final progress = maxValue <= 0 ? 0.0 : value / maxValue;
                 final cappedProgress = progress.clamp(0.0, 1.0);
-                final fillW = c.maxWidth * cappedProgress;
+                final fillWidth = constraints.maxWidth * cappedProgress;
                 return Stack(
                   children: [
                     Container(
-                      height: trackH,
+                      height: trackHeight,
                       decoration: BoxDecoration(
                         color: cs.onSurface.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(14),
@@ -275,14 +280,14 @@ class _ModeRow extends StatelessWidget {
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 600),
                       curve: Curves.easeOutCubic,
-                      width: fillW,
-                      height: trackH,
+                      width: fillWidth,
+                      height: trackHeight,
                       decoration: BoxDecoration(
-                        color: _photoBlue,
+                        color: barColor,
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: _photoBlue.withValues(alpha: 0.35),
+                            color: barColor.withValues(alpha: 0.35),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -291,7 +296,7 @@ class _ModeRow extends StatelessWidget {
                     ),
                     if (value > 0)
                       Positioned(
-                        right: (c.maxWidth - fillW) + 6,
+                        right: (constraints.maxWidth - fillWidth) + 6,
                         top: -2,
                         child: Text(
                           '$value',
