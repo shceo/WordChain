@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-class AchievementsScreen extends StatelessWidget {
+import 'achievements_notifier.dart';
+
+class AchievementsScreen extends ConsumerWidget {
   const AchievementsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final items = const <_Achievement>[
-      _Achievement(title: 'First Web', subtitle: 'Create your first web'),
-      _Achievement(title: 'Brainstormer', subtitle: '50 words in one session'),
-      _Achievement(title: 'Color Master', subtitle: '5 categories in one web'),
-      _Achievement(title: 'Speed Thinker', subtitle: '10 words in a minute'),
-    ];
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(achievementsProvider);
+    final items = _itemsFromState(state);
 
     return Scaffold(
       appBar: AppBar(
@@ -34,26 +33,86 @@ class AchievementsScreen extends StatelessWidget {
   }
 }
 
+List<_Achievement> _itemsFromState(AchievementsState state) {
+  final firstWebUnlocked = state.isUnlocked(AchievementType.firstWeb);
+  final firstWebCurrent = state.chainLength > 0 ? 1 : 0;
+  final firstWebProgress = firstWebUnlocked ? 1.0 : firstWebCurrent.toDouble();
+  final firstWebLabel =
+      firstWebUnlocked ? 'Completed' : '$firstWebCurrent/1 web created';
+
+  final brainstormUnlocked = state.isUnlocked(AchievementType.brainstormer);
+  final brainstormCurrent = state.chainLength > 50 ? 50 : state.chainLength;
+  final brainstormProgress =
+      brainstormUnlocked ? 1.0 : brainstormCurrent / 50.0;
+  final brainstormLabel = brainstormUnlocked
+      ? 'Completed'
+      : '$brainstormCurrent/50 words in this chain';
+
+  final colorUnlocked = state.isUnlocked(AchievementType.colorMaster);
+  final colorCurrent = state.uniqueCategories > 5 ? 5 : state.uniqueCategories;
+  final colorProgress = colorUnlocked ? 1.0 : colorCurrent / 5.0;
+  final colorLabel =
+      colorUnlocked ? 'Completed' : '$colorCurrent/5 categories connected';
+
+  final speedUnlocked = state.isUnlocked(AchievementType.speedThinker);
+  final speedCurrent = state.wordsLastMinute > 10 ? 10 : state.wordsLastMinute;
+  final speedProgress = speedUnlocked ? 1.0 : speedCurrent / 10.0;
+  final speedLabel =
+      speedUnlocked ? 'Completed' : '$speedCurrent/10 words in the last minute';
+
+  return [
+    _Achievement(
+      title: 'First Web',
+      subtitle: 'Create your first web',
+      unlocked: firstWebUnlocked,
+      progress: firstWebProgress,
+      progressLabel: firstWebLabel,
+    ),
+    _Achievement(
+      title: 'Brainstormer',
+      subtitle: '50 words in one session',
+      unlocked: brainstormUnlocked,
+      progress: brainstormProgress,
+      progressLabel: brainstormLabel,
+    ),
+    _Achievement(
+      title: 'Color Master',
+      subtitle: '5 categories in one web',
+      unlocked: colorUnlocked,
+      progress: colorProgress,
+      progressLabel: colorLabel,
+    ),
+    _Achievement(
+      title: 'Speed Thinker',
+      subtitle: '10 words in a minute',
+      unlocked: speedUnlocked,
+      progress: speedProgress,
+      progressLabel: speedLabel,
+    ),
+  ];
+}
+
 class _Achievement {
   final String title;
   final String subtitle;
   final bool unlocked;
+  final double progress;
+  final String progressLabel;
   const _Achievement({
     required this.title,
     required this.subtitle,
-    this.unlocked = false,
+    required this.unlocked,
+    required this.progress,
+    required this.progressLabel,
   });
 }
 
-/// Карточка в стиле макета: мягкий фон, закругления, тонкий бордер и «блик» сверху.
 class _AchievementTile extends StatelessWidget {
   const _AchievementTile({required this.item});
   final _Achievement item;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return _SoftCard(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -61,7 +120,13 @@ class _AchievementTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
-              child: _TitleBlock(title: item.title, subtitle: item.subtitle),
+              child: _TitleBlock(
+                title: item.title,
+                subtitle: item.subtitle,
+                progress: item.progress,
+                progressLabel: item.progressLabel,
+                unlocked: item.unlocked,
+              ),
             ),
             const SizedBox(width: 12),
             _LockBadge(locked: !item.unlocked),
@@ -73,13 +138,27 @@ class _AchievementTile extends StatelessWidget {
 }
 
 class _TitleBlock extends StatelessWidget {
-  const _TitleBlock({required this.title, required this.subtitle});
+  const _TitleBlock({
+    required this.title,
+    required this.subtitle,
+    required this.progress,
+    required this.progressLabel,
+    required this.unlocked,
+  });
   final String title;
   final String subtitle;
+  final double progress;
+  final String progressLabel;
+  final bool unlocked;
 
   @override
   Widget build(BuildContext context) {
-    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+    final barColor = unlocked
+        ? theme.colorScheme.primary
+        : theme.colorScheme.primary.withValues(alpha: 0.75);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -87,20 +166,40 @@ class _TitleBlock extends StatelessWidget {
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-                height: 1.1,
-              ),
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            height: 1.1,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           subtitle,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: onSurface.withOpacity(0.75),
-                height: 1.2,
-              ),
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: onSurface.withValues(alpha: 0.75),
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: progress.clamp(0.0, 1.0),
+            minHeight: 6,
+            backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.2),
+            valueColor: AlwaysStoppedAnimation<Color>(barColor),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          progressLabel,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: onSurface.withValues(alpha: 0.7),
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );
@@ -120,38 +219,43 @@ class _LockBadge extends StatelessWidget {
       width: 48,
       height: 48,
       decoration: BoxDecoration(
-        color: cs.surface.withOpacity(0.12),
+        color: cs.surface.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.6), width: 2),
+        border: Border.all(
+            color: cs.outlineVariant.withValues(alpha: 0.6), width: 2),
       ),
       alignment: Alignment.center,
       child: Icon(
         icon,
         size: 26,
-        color: locked ? cs.onSurface.withOpacity(0.75) : cs.primary,
+        color: locked ? cs.onSurface.withValues(alpha: 0.75) : cs.primary,
       ),
     );
   }
 }
 
-/// Универсальная «мягкая» карточка с тонким бордером и лёгким верхним блик-градиентом.
 class _SoftCard extends StatelessWidget {
-  const _SoftCard({required this.child, this.radius = 22});
+  const _SoftCard({required this.child});
   final Widget child;
-  final double radius;
+
+  static const double _radius = 22;
+  static const BorderRadius _cardRadius =
+      BorderRadius.all(Radius.circular(_radius));
+  static const BorderRadius _topRadius =
+      BorderRadius.vertical(top: Radius.circular(_radius));
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withOpacity(0.66),
-        borderRadius: BorderRadius.circular(radius),
-        border:
-            Border.all(color: cs.outlineVariant.withOpacity(0.55), width: 1.6),
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.66),
+        borderRadius: _cardRadius,
+        border: Border.all(
+            color: cs.outlineVariant.withValues(alpha: 0.55), width: 1.6),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.10),
+            color: Colors.black.withValues(alpha: 0.10),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -166,9 +270,8 @@ class _SoftCard extends StatelessWidget {
             height: 14,
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(radius)),
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: _topRadius,
               ),
             ),
           ),

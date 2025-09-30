@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../achievements/achievements_notifier.dart';
+
 final gameProvider =
     NotifierProvider<GameNotifier, GameState>(GameNotifier.new);
 
@@ -31,6 +33,10 @@ class GameState {
 
 class GameNotifier extends Notifier<GameState> {
   static const _storageKey = 'word_chain_words';
+
+  static const int _baseWordPoints = 1;
+  static const int _bonusStep = 5;
+  static const int _bonusPoints = 10;
 
   SharedPreferences? _prefs;
   bool _loadScheduled = false;
@@ -62,9 +68,15 @@ class GameNotifier extends Notifier<GameState> {
       score: _calculateScore(saved),
       initialized: true,
     );
+    ref.read(achievementsProvider.notifier).onChainRestored(saved);
   }
 
-  int _calculateScore(List<String> words) => words.length;
+  int _calculateScore(List<String> words) {
+    if (words.isEmpty) return 0;
+    final base = words.length * _baseWordPoints;
+    final bonus = (words.length ~/ _bonusStep) * _bonusPoints;
+    return base + bonus;
+  }
 
   Future<String?> addWord(String word) async {
     final trimmed = word.trim();
@@ -95,6 +107,7 @@ class GameNotifier extends Notifier<GameState> {
       score: _calculateScore(words),
       initialized: true,
     );
+    ref.read(achievementsProvider.notifier).onWordAdded(trimmed, words.length);
     await _persist(words);
     return null;
   }
@@ -112,6 +125,7 @@ class GameNotifier extends Notifier<GameState> {
 
   Future<void> resetChain() async {
     state = state.copyWith(words: [], score: 0, initialized: true);
+    ref.read(achievementsProvider.notifier).onChainReset();
     final prefs = await _ensurePrefs();
     await prefs.remove(_storageKey);
   }
