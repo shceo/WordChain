@@ -122,7 +122,7 @@ class SoundManager {
   Future<void> playMenuMusic() async {
     await _playLoop(
       _menuPlayer,
-      const AssetSource('audio/v-a-mocart-lunnaya-sonata.mp3'),
+       AssetSource('audio/v-a-mocart-lunnaya-sonata.mp3'),
       volume: _musicVolume,
     );
   }
@@ -134,7 +134,7 @@ class SoundManager {
   Future<void> startTimerTick() async {
     await _playLoop(
       _tickPlayer,
-      const AssetSource('audio/clock.mp3'),
+       AssetSource('audio/clock.mp3'),
       volume: _effectsVolume,
     );
   }
@@ -150,7 +150,7 @@ class SoundManager {
     await _effectPlayer.stop();
     await _effectPlayer.setReleaseMode(ReleaseMode.stop);
     await _effectPlayer.setVolume(_effectsVolume);
-    await _effectPlayer.play(const AssetSource('audio/level_up.mp3'));
+    await _effectPlayer.play( AssetSource('audio/level_up.mp3'));
   }
 
   Future<void> setMusicVolume(double volume) async {

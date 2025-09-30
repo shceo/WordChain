@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -7,6 +7,10 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:wordchain/main.dart';
 
 import '../../core/sound_manager.dart';
+
+// Shared RouteObserver used for RouteAware widgets in this file.
+final RouteObserver<PageRoute<dynamic>> routeObserver =
+    RouteObserver<PageRoute<dynamic>>();
 
 class MenuScreen extends ConsumerStatefulWidget {
   const MenuScreen({super.key});
