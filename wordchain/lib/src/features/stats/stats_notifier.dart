@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/models.dart';
+import '../../core/sound_manager.dart';
 
 final statsProvider =
     NotifierProvider<StatsNotifier, StatsState>(StatsNotifier.new);
@@ -83,12 +84,16 @@ class StatsNotifier extends Notifier<StatsState> {
 
   Future<void> onWordAdded(
       {required GameMode mode, required int chainLength}) async {
+    final isNewLongest = chainLength > state.longestChain;
     final updated = state.copyWith(
       totalWords: state.totalWords + 1,
       longestChain: math.max(state.longestChain, chainLength),
     );
     state = updated;
     await _persist(updated);
+    if (isNewLongest) {
+      unawaited(ref.read(soundManagerProvider).playLevelUp());
+    }
   }
 
   Future<void> onSessionCompleted(
@@ -96,7 +101,10 @@ class StatsNotifier extends Notifier<StatsState> {
     if (wordCount <= 0) return;
 
     final updatedModeMap = Map<GameMode, int>.from(state.bestByMode);
-    updatedModeMap[mode] = math.max(updatedModeMap[mode] ?? 0, wordCount);
+    final previousModeBest = updatedModeMap[mode] ?? 0;
+    updatedModeMap[mode] = math.max(previousModeBest, wordCount);
+
+    final previousBestSession = state.bestSession;
 
     final updated = state.copyWith(
       sessionCount: state.sessionCount + 1,
@@ -106,6 +114,11 @@ class StatsNotifier extends Notifier<StatsState> {
     );
     state = updated;
     await _persist(updated);
+    final isNewBestSession = wordCount > previousBestSession;
+    final isNewModeRecord = wordCount > previousModeBest;
+    if (isNewBestSession || isNewModeRecord) {
+      unawaited(ref.read(soundManagerProvider).playLevelUp());
+    }
   }
 
   Future<SharedPreferences> _ensurePrefs() async {

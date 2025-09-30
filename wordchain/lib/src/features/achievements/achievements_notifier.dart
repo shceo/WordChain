@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/sound_manager.dart';
+
 enum AchievementType { firstWeb, brainstormer, colorMaster, speedThinker }
 
 class AchievementsState {
@@ -163,6 +165,7 @@ class AchievementsNotifier extends Notifier<AchievementsState> {
     state = state.copyWith(unlocked: updated);
     final prefs = await _ensurePrefs();
     await prefs.setBool(_storageKey(type), true);
+    unawaited(ref.read(soundManagerProvider).playLevelUp());
   }
 
   Set<String> _collectCategories(List<String> words) {

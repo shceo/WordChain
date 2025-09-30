@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import '../../core/sound_manager.dart';
 import 'game_settings_notifier.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -10,14 +12,12 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  // state
-  double music = 0.75;
-  double effects = 0.55;
-
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(gameSettingsProvider);
     final settingsNotifier = ref.read(gameSettingsProvider.notifier);
+    final soundSettings = ref.watch(soundSettingsProvider);
+    final soundNotifier = ref.read(soundSettingsProvider.notifier);
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -47,15 +47,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _rowLabel(context, 'Music volume'),
                   const SizedBox(height: 8),
                   _VolumeSlider(
-                    value: music,
-                    onChanged: (v) => setState(() => music = v),
+                    value: soundSettings.musicVolume,
+                    onChanged: (v) => soundNotifier.setMusicVolume(v),
                   ),
                   const SizedBox(height: 16),
                   _rowLabel(context, 'Effects volume'),
                   const SizedBox(height: 8),
                   _VolumeSlider(
-                    value: effects,
-                    onChanged: (v) => setState(() => effects = v),
+                    value: soundSettings.effectsVolume,
+                    onChanged: (v) => soundNotifier.setEffectsVolume(v),
                   ),
                 ],
               ),
